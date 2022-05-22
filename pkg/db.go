@@ -91,3 +91,23 @@ func (db *Database) Conversation(ctx context.Context) (conversation *Conversatio
 
 	return nil, nil
 }
+
+func (db *Database) ListConversations(ctx context.Context) (conversations []string, err error) {
+	rows, err := db.db.QueryContext(ctx, "SELECT guid FROM chat")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	conversations = make([]string, 0)
+	for rows.Next() {
+		var guid string
+		err = rows.Scan(&guid)
+		if err != nil {
+			return nil, err
+		}
+		conversations = append(conversations, guid)
+	}
+	return conversations, nil
+}
