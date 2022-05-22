@@ -1,4 +1,4 @@
-# hermes
+# hermes 📯
 
 Command line interface for iMessage databases on MacOS. With hermes you can view your messages, export them and view your message statistics. 
 
