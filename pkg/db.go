@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
+	"sort"
+	"strings"
+	"time"
 )
 
 type Database struct {
@@ -79,35 +82,156 @@ func (db *Database) Statistics(ctx context.Context) (stats *Statistics, err erro
 	return stats, nil
 }
 
-type Conversation struct {
-	Messages []*Message `json:"messages"`
+// Participant is represented by a handle in the database
+type Participant struct {
+	ID      int    `json:"id" yaml:"id"`
+	Number  string `json:"number" yaml:"number"`
+	Country string `json:"country" yaml:"country"`
+	Service string `json:"service" yaml:"service"`
+}
+
+// Chat has a unique ID and at least one participant.
+type Chat struct {
+	ID           int            `json:"id" yaml:"id"`
+	Participants []*Participant `json:"participants,omitempty" yaml:"participants,omitempty"`
+	Messages     []*Message     `json:"messages,omitempty" yaml:"messages,omitempty"`
 }
 
 type Message struct {
-	Text string `json:"text"`
+	SenderID int       `json:"sender_id" yaml:"sender-id"`
+	Text     string    `json:"text" yaml:"text"`
+	Date     time.Time `json:"date" yaml:"date"`
 }
 
-func (db *Database) Conversation(ctx context.Context) (conversation *Conversation, err error) {
-
-	return nil, nil
-}
-
-func (db *Database) ListConversations(ctx context.Context) (conversations []string, err error) {
-	rows, err := db.db.QueryContext(ctx, "SELECT guid FROM chat")
+// Conversation returns all messages from a conversation with the given identifier if available.
+func (db *Database) Conversation(ctx context.Context, chatID int) (chat *Chat, err error) {
+	rows, err := db.db.QueryContext(ctx, `SELECT
+    datetime (message.date / 1000000000 + strftime ("%s", "2001-01-01"), "unixepoch", "localtime") AS message_date,
+    message.text,
+    message.is_from_me,
+    handle."ROWID", 
+    handle.id, 
+    handle.country, 
+    handle.service
+FROM
+    chat
+    JOIN chat_message_join ON chat. "ROWID" = chat_message_join.chat_id
+    JOIN message ON chat_message_join.message_id = message. "ROWID"
+    LEFT JOIN handle on message.handle_id = handle."ROWID"
+WHERE
+    chat."ROWID" = ?`, chatID)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		_ = rows.Close()
 	}()
-	conversations = make([]string, 0)
+
+	participantMap := make(map[int]*Participant)
+	chat = &Chat{
+		Participants: make([]*Participant, 0),
+		Messages:     make([]*Message, 0),
+	}
 	for rows.Next() {
-		var guid string
-		err = rows.Scan(&guid)
+		var dateString string
+		p := &Participant{}
+		m := &Message{}
+		var isFromMe bool
+		var text sql.NullString
+		var participantID sql.NullInt64
+		var participantNumber sql.NullString
+		var participantCountry sql.NullString
+		var participantService sql.NullString
+		err = rows.Scan(&dateString, &text, &isFromMe, &participantID, &participantNumber, &participantCountry,
+			&participantService)
 		if err != nil {
 			return nil, err
 		}
-		conversations = append(conversations, guid)
+
+		if participantID.Valid {
+			p.ID = int(participantID.Int64)
+		}
+		if participantNumber.Valid {
+			p.Number = participantNumber.String
+		}
+		if participantCountry.Valid {
+			p.Country = participantCountry.String
+		}
+		if participantService.Valid {
+			p.Service = participantService.String
+		}
+
+		// Copy sender ID to message
+		m.SenderID = p.ID
+
+		if text.Valid {
+			m.Text = text.String
+		}
+		m.Date, err = time.Parse("2006-01-02 15:04:05", dateString)
+		if err != nil {
+			panic(err)
+		}
+
+		chat.Messages = append(chat.Messages, m)
+
+		if p.ID != 0 {
+			if _, ok := participantMap[p.ID]; !ok {
+				participantMap[p.ID] = p
+			}
+		}
 	}
-	return conversations, nil
+
+	for _, p := range participantMap {
+		chat.Participants = append(chat.Participants, p)
+	}
+
+	return chat, nil
+}
+
+func (db *Database) ListConversations(ctx context.Context) (chats []*Chat, err error) {
+	rows, err := db.db.QueryContext(ctx, `SELECT
+    chat."ROWID", handle."ROWID", handle.id, handle.country, handle.service
+FROM
+    chat
+    JOIN chat_handle_join ON chat."ROWID" = chat_handle_join.chat_id
+    JOIN handle ON chat_handle_join.handle_id = handle."ROWID"`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	chatMap := make(map[int]*Chat)
+	for rows.Next() {
+		var chatID int
+		var p Participant
+		err = rows.Scan(&chatID, &p.ID, &p.Number, &p.Country, &p.Service)
+		if err != nil {
+			return nil, err
+		}
+
+		// Normalize values
+		p.Service = strings.ToUpper(p.Service)
+		p.Country = strings.ToUpper(p.Country)
+
+		if _, ok := chatMap[chatID]; !ok {
+			chatMap[chatID] = &Chat{
+				ID:           chatID,
+				Participants: make([]*Participant, 0),
+			}
+		}
+		chatMap[chatID].Participants = append(chatMap[chatID].Participants, &p)
+	}
+
+	chats = make([]*Chat, 0)
+	for _, chat := range chatMap {
+		chats = append(chats, chat)
+	}
+
+	// Sort chats by ID so that they are always shown in the same order.
+	sort.Slice(chats, func(i, j int) bool {
+		return chats[i].ID < chats[j].ID
+	})
+
+	return chats, nil
 }

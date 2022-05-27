@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	hermes "github.com/f-ewald/hermes/pkg"
 	"github.com/spf13/cobra"
 	"os"
 
@@ -11,11 +12,15 @@ import (
 
 var cfgFile string
 
+var output string
+
 // Config bundles the configuration.
 type Config struct {
 	// Output defines the output format. If nothing is defined, normal text will be written to
 	// STDOUT.
 	Output string
+
+	Formatter hermes.Formatter
 
 	// ChatDB contains the full path to the chat database.
 	ChatDB string
@@ -29,7 +34,19 @@ var rootCmd = &cobra.Command{
 	Use:   "hermes",
 	Short: "Command-line interface for iMessage databases",
 	Long: `Hermes is a command-line interface for iMessage databases.
-You can use it to analyze and display conversations and view statistics.`,
+You can use it to analyze and display retrieveConversations and view statistics.`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		switch output {
+		case "text":
+			cfg.Formatter = &hermes.TextFormatter{}
+		case "json":
+			cfg.Formatter = &hermes.JsonFormatter{}
+		case "yaml":
+			cfg.Formatter = &hermes.YamlFormatter{}
+		default:
+			panic("output must be one of json, text or yaml")
+		}
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -42,8 +59,8 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.hermes.yaml)")
-	rootCmd.PersistentFlags().StringVarP(&cfg.Output, "output", "o", "text", "The output format. Can be either json, yaml or text")
-	rootCmd.PersistentFlags().StringVar(&cfg.ChatDB, "db", "", "Full path to the chat database if it is different than the default path.")
+	rootCmd.PersistentFlags().StringVarP(&output, "output", "o", "text", "The output format. Can be either json, yaml or text")
+	rootCmd.PersistentFlags().StringVarP(&cfg.ChatDB, "database", "d", "", "Full path to the chat database if it is different than the default path.")
 }
 
 // initConfig reads in config file and ENV variables if set.

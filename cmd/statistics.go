@@ -18,18 +18,6 @@ var statisticsCmd = &cobra.Command{
 	Long: `Analyze all messages that have been sent and received and display the statistics.
 Supports text, JSON and YAML output format.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		var formatter hermes.Formatter
-		switch cfg.Output {
-		case "text":
-			formatter = &hermes.TextFormatter{}
-		case "json":
-			formatter = &hermes.JsonFormatter{}
-		case "yaml":
-			formatter = &hermes.YamlFormatter{}
-		default:
-			panic("invalid output format")
-		}
-
 		messageDB, err := hermes.MessageDBFilename()
 		if err != nil {
 			log.Fatal(err)
@@ -50,7 +38,7 @@ Supports text, JSON and YAML output format.`,
 		if err != nil {
 			log.Fatal(err)
 		}
-		formatted, err := formatter.Format(stats)
+		formatted, err := cfg.Formatter.Format(stats, "statistics.tpl")
 		if err != nil {
 			log.Fatal(err)
 		}

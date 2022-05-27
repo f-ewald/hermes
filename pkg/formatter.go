@@ -5,23 +5,19 @@ import (
 	"encoding/json"
 	"github.com/f-ewald/hermes/templates"
 	"gopkg.in/yaml.v2"
-	"html/template"
+	"text/template"
 )
 
 type Formatter interface {
-	Format(interface{}) ([]byte, error)
+	Format(a interface{}, tpl string) ([]byte, error)
 }
 
 type TextFormatter struct {
 	tpl string
 }
 
-func NewTextFormatter(tpl string) Formatter {
-	return &TextFormatter{tpl: tpl}
-}
-
-func (formatter *TextFormatter) Format(a interface{}) ([]byte, error) {
-	b, err := templates.Templates.ReadFile("statistics.tpl")
+func (formatter *TextFormatter) Format(a interface{}, tpl string) ([]byte, error) {
+	b, err := templates.Templates.ReadFile(tpl)
 	if err != nil {
 		return nil, err
 	}
@@ -39,12 +35,12 @@ func (formatter *TextFormatter) Format(a interface{}) ([]byte, error) {
 
 type JsonFormatter struct{}
 
-func (formatter *JsonFormatter) Format(a interface{}) ([]byte, error) {
+func (formatter *JsonFormatter) Format(a interface{}, _ string) ([]byte, error) {
 	return json.Marshal(a)
 }
 
 type YamlFormatter struct{}
 
-func (formatter *YamlFormatter) Format(a interface{}) ([]byte, error) {
+func (formatter *YamlFormatter) Format(a interface{}, _ string) ([]byte, error) {
 	return yaml.Marshal(a)
 }
