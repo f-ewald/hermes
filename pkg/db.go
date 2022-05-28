@@ -35,13 +35,15 @@ func (db *Database) Close() (err error) {
 
 // Statistics contains all metrics that are shown to the user.
 type Statistics struct {
-	TotalMessages    int       `json:"total_messages" yaml:"total-messages"`
-	ReceivedMessages int       `json:"received_messages" yaml:"received-messages"`
-	SentMessages     int       `json:"sent_messages" yaml:"sent-messages"`
-	AvgDailyMessages float64   `json:"avg_daily_messages" yaml:"avg-daily-messages"`
-	Chats            int       `json:"chats" yaml:"chats"`
-	FirstMessage     time.Time `json:"first_message" yaml:"first-message"`
-	LastMessage      time.Time `json:"last_message" yaml:"last-message"`
+	TotalMessages      int       `json:"total_messages" yaml:"total-messages"`
+	ReceivedMessages   int       `json:"received_messages" yaml:"received-messages"`
+	SentMessages       int       `json:"sent_messages" yaml:"sent-messages"`
+	AvgDailyMessages   float64   `json:"avg_daily_messages" yaml:"avg-daily-messages"`
+	AvgMonthlyMessages float64   `json:"avg_monthly_messages" yaml:"avg-monthly-messages"`
+	AvgYearlyMessages  float64   `json:"avg_yearly_messages" yaml:"avg-yearly-messages"`
+	Chats              int       `json:"chats" yaml:"chats"`
+	FirstMessage       time.Time `json:"first_message" yaml:"first-message"`
+	LastMessage        time.Time `json:"last_message" yaml:"last-message"`
 }
 
 func (db *Database) Statistics(ctx context.Context) (stats *Statistics, err error) {
@@ -68,13 +70,6 @@ func (db *Database) Statistics(ctx context.Context) (stats *Statistics, err erro
 		return nil, err
 	}
 
-	// Average daily messages
-	row = db.db.QueryRowContext(ctx, "SELECT AVG(m.c) FROM (select count(*) AS c from message GROUP BY strftime('%Y-%m-%d', datetime(date/1000000000 + strftime('%s','2001-01-01'), 'unixepoch'))) AS m")
-	err = row.Scan(&stats.AvgDailyMessages)
-	if err != nil {
-		return nil, err
-	}
-
 	row = db.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM chat")
 	err = row.Scan(&stats.Chats)
 	if err != nil {
@@ -89,10 +84,46 @@ func (db *Database) Statistics(ctx context.Context) (stats *Statistics, err erro
 		return nil, err
 	}
 	// Epoch in iMessage starts at 2001-01-01 as opposed to 1970-01-01 in Go.
-	stats.FirstMessage = time.UnixMicro(firstMessage/1e3).AddDate(31, 0, 0)
-	stats.LastMessage = time.UnixMicro(lastMessage/1e3).AddDate(31, 0, 0)
+	stats.FirstMessage = time.UnixMicro(firstMessage/1e3).
+		AddDate(31, 0, 0).
+		Round(time.Second)
+	stats.LastMessage = time.UnixMicro(lastMessage/1e3).
+		AddDate(31, 0, 0).
+		Round(time.Second)
+
+	// Total days are defined as full 24-hour blocks
+	totalDays := float64(int(stats.LastMessage.Sub(stats.FirstMessage).Hours() / 24))
+	stats.AvgDailyMessages = float64(stats.TotalMessages) / totalDays
+
+	totalMonths := monthsSince(stats.FirstMessage, stats.LastMessage)
+	stats.AvgMonthlyMessages = float64(stats.TotalMessages) / float64(totalMonths)
+
+	totalYears := yearsSince(stats.FirstMessage, stats.LastMessage)
+	stats.AvgYearlyMessages = float64(stats.TotalMessages) / float64(totalYears)
 
 	return stats, nil
+}
+
+// monthsSince counts the months between two points in time, rounding up to the next full month.
+func monthsSince(t1 time.Time, t2 time.Time) int {
+	if t2.Before(t1) {
+		return 0
+	}
+	count := 1
+	month := t1.UTC().Month()
+	for t1.Before(t2) {
+		if t1.Month() != month {
+			count += 1
+			month = t1.UTC().Month()
+		}
+		t1 = t1.AddDate(0, 0, 1)
+	}
+	return count
+}
+
+// yearsSince returns the number of full years between two timestamps.
+func yearsSince(t1 time.Time, t2 time.Time) int {
+	return monthsSince(t1, t2) / 12
 }
 
 // Participant is represented by a handle in the database
