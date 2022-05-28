@@ -88,8 +88,9 @@ func (db *Database) Statistics(ctx context.Context) (stats *Statistics, err erro
 	if err != nil {
 		return nil, err
 	}
-	stats.FirstMessage = time.Unix(firstMessage/1e9, 0).AddDate(31, 0, 0)
-	stats.LastMessage = time.Unix(lastMessage/1e9, 0).AddDate(31, 0, 0)
+	// Epoch in iMessage starts at 2001-01-01 as opposed to 1970-01-01 in Go.
+	stats.FirstMessage = time.UnixMicro(firstMessage/1e3).AddDate(31, 0, 0)
+	stats.LastMessage = time.UnixMicro(lastMessage/1e3).AddDate(31, 0, 0)
 
 	return stats, nil
 }
