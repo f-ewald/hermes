@@ -35,11 +35,13 @@ func (db *Database) Close() (err error) {
 
 // Statistics contains all metrics that are shown to the user.
 type Statistics struct {
-	TotalMessages    int     `json:"total_messages" yaml:"total-messages"`
-	ReceivedMessages int     `json:"received_messages" yaml:"received-messages"`
-	SentMessages     int     `json:"sent_messages" yaml:"sent-messages"`
-	AvgDailyMessages float64 `json:"avg_daily_messages" yaml:"avg-daily-messages"`
-	Chats            int     `json:"chats" yaml:"chats"`
+	TotalMessages    int       `json:"total_messages" yaml:"total-messages"`
+	ReceivedMessages int       `json:"received_messages" yaml:"received-messages"`
+	SentMessages     int       `json:"sent_messages" yaml:"sent-messages"`
+	AvgDailyMessages float64   `json:"avg_daily_messages" yaml:"avg-daily-messages"`
+	Chats            int       `json:"chats" yaml:"chats"`
+	FirstMessage     time.Time `json:"first_message" yaml:"first-message"`
+	LastMessage      time.Time `json:"last_message" yaml:"last-message"`
 }
 
 func (db *Database) Statistics(ctx context.Context) (stats *Statistics, err error) {
@@ -78,6 +80,16 @@ func (db *Database) Statistics(ctx context.Context) (stats *Statistics, err erro
 	if err != nil {
 		return nil, err
 	}
+
+	row = db.db.QueryRowContext(ctx, "SELECT MIN(date), MAX(date) FROM message")
+	var firstMessage int64
+	var lastMessage int64
+	err = row.Scan(&firstMessage, &lastMessage)
+	if err != nil {
+		return nil, err
+	}
+	stats.FirstMessage = time.Unix(firstMessage/1e9, 0).AddDate(31, 0, 0)
+	stats.LastMessage = time.Unix(lastMessage/1e9, 0).AddDate(31, 0, 0)
 
 	return stats, nil
 }
