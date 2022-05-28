@@ -96,10 +96,14 @@ func (db *Database) Statistics(ctx context.Context) (stats *Statistics, err erro
 	stats.AvgDailyMessages = float64(stats.TotalMessages) / totalDays
 
 	totalMonths := monthsSince(stats.FirstMessage, stats.LastMessage)
-	stats.AvgMonthlyMessages = float64(stats.TotalMessages) / float64(totalMonths)
+	if totalMonths > 0 {
+		stats.AvgMonthlyMessages = float64(stats.TotalMessages) / float64(totalMonths)
+	}
 
 	totalYears := yearsSince(stats.FirstMessage, stats.LastMessage)
-	stats.AvgYearlyMessages = float64(stats.TotalMessages) / float64(totalYears)
+	if totalYears > 0 {
+		stats.AvgYearlyMessages = float64(stats.TotalMessages) / float64(totalYears)
+	}
 
 	return stats, nil
 }
