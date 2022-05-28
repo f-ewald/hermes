@@ -33,6 +33,12 @@ Flags:
 Use "hermes [command] --help" for more information about a command.
 ```
 
+You can view statistics with the `statistics` command.
+
+To display conversations use the `conversations list` command. This returns a list of all conversations sorted by internal id together with the participants. If this is a one-to-one conversation, there will be only one participant. Group conversations have multiple participants.
+
+To show the conversation use the `conversation get <id>` command. Replace `<id>` with the unique conversation identifier that can be obtained from the list command. The conversation will contain the participants and all messages ordered by date. Each message is prefixed with the unique participant identifier.
+
 ## Contributing
 Contributions are welcome via pull request.
 
